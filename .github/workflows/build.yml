@@ -10,12 +10,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Find project folder
-        id: find
+      - name: Find or unzip project
         run: |
           f=$(find . -name settings.gradle.kts -not -path './.git/*' | head -1)
+          if [ -z "$f" ]; then
+            z=$(find . -maxdepth 2 -name '*.zip' -not -path './.git/*' | head -1)
+            echo "Zip: $z"
+            if [ -z "$z" ]; then echo "No project and no zip found"; ls -R | head -50; exit 1; fi
+            mkdir -p proj
+            unzip -q -o "$z" -d proj
+            f=$(find proj -name settings.gradle.kts | head -1)
+          fi
           echo "Found: $f"
-          echo "dir=$(dirname "$f")" >> $GITHUB_OUTPUT
+          echo "DIR=$(dirname "$f")" >> $GITHUB_ENV
 
       - uses: actions/setup-java@v4
         with:
@@ -27,10 +34,10 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        working-directory: ${{ steps.find.outputs.dir }}
+        working-directory: ${{ env.DIR }}
         run: gradle assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
           name: MemoryTest-debug-apk
-          path: ${{ steps.find.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          path: ${{ env.DIR }}/app/build/outputs/apk/debug/*.apk
